@@ -1,6 +1,6 @@
 # exhibit
 
-Static HTML auditor compliance posture dashboard.
+One self-contained HTML file. Opens in a browser, prints to PDF, contains no JavaScript, no external dependencies, no internal-only fields. Hand it to an auditor.
 
 ```bash
 go get github.com/Formulary-Labs/exhibit
@@ -8,9 +8,7 @@ go get github.com/Formulary-Labs/exhibit
 
 ## What it does
 
-`exhibit` produces a single self-contained HTML file from program compliance posture data. The file has no JavaScript, no external dependencies, and no internal-only fields. It prints cleanly to PDF. You can open it in a browser, attach it to an audit package, or serve it as a static file.
-
-The four sections — monitoring activity, control coverage, risk register, and evidence calendar — are assembled from the outputs of other Formulary tools. `exhibit` renders; it does not compute.
+`exhibit` produces a single self-contained HTML file from program compliance posture data. The four sections — monitoring activity, control coverage, risk register, and evidence calendar — are assembled from the outputs of other Formulary tools. `exhibit` renders; it does not compute.
 
 ## Input
 
