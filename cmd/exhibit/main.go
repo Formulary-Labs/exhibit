@@ -115,12 +115,18 @@ type rawRunState struct {
 	RecommendedNextRun *time.Time `json:"recommended_next_run,omitempty"`
 
 	Coverage *struct {
+		// Schema 2.0 fields.
 		TotalControls    int     `json:"total_controls,omitempty"`
 		EvidencedPct     float64 `json:"evidenced_pct,omitempty"`
 		ImplementedPct   float64 `json:"implemented_pct,omitempty"`
 		GapPct           float64 `json:"gap_pct,omitempty"`
 		OwnerGapCount    int     `json:"owner_gap_count,omitempty"`
 		EvidenceGapCount int     `json:"evidence_gap_count,omitempty"`
+		// Schema 1.1 legacy fields.
+		Total       int `json:"total,omitempty"`
+		Evidenced   int `json:"evidenced,omitempty"`
+		Implemented int `json:"implemented,omitempty"`
+		Gaps        int `json:"gaps,omitempty"`
 	} `json:"coverage,omitempty"`
 
 	Risks []struct {
@@ -166,15 +172,17 @@ func populateFromRunState(view *render.AuditorView, rs *rawRunState, now time.Ti
 			dateStr, rs.RecommendedNextRun.Format("2006-01-02"))
 	}
 
-	// Coverage.
+	// Coverage — coalesce schema 2.0 fields over 1.1 legacy fields.
 	if rs.Coverage != nil {
+		c := rs.Coverage
+		total := coalesceInt(c.TotalControls, c.Total)
 		view.Coverage = &render.CoverageSummary{
-			TotalControls:    rs.Coverage.TotalControls,
-			EvidencedPct:     rs.Coverage.EvidencedPct,
-			ImplementedPct:   rs.Coverage.ImplementedPct,
-			GapPct:           rs.Coverage.GapPct,
-			OwnerGapCount:    rs.Coverage.OwnerGapCount,
-			EvidenceGapCount: rs.Coverage.EvidenceGapCount,
+			TotalControls:    total,
+			EvidencedPct:     coalesceF(c.EvidencedPct, pct(c.Evidenced, total)),
+			ImplementedPct:   coalesceF(c.ImplementedPct, pct(c.Implemented, total)),
+			GapPct:           coalesceF(c.GapPct, pct(c.Gaps, total)),
+			OwnerGapCount:    c.OwnerGapCount,
+			EvidenceGapCount: coalesceInt(c.EvidenceGapCount, c.Gaps),
 		}
 	}
 
@@ -220,6 +228,27 @@ func coalesceStr(a, b string) string {
 		return a
 	}
 	return b
+}
+
+func coalesceInt(a, b int) int {
+	if a != 0 {
+		return a
+	}
+	return b
+}
+
+func coalesceF(a, b float64) float64 {
+	if a != 0 {
+		return a
+	}
+	return b
+}
+
+func pct(n, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(n) / float64(total) * 100
 }
 
 func usage() {

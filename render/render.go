@@ -221,14 +221,9 @@ func renderSection4(sb *strings.Builder, v *AuditorView) {
 	sb.WriteString(`</section>` + "\n")
 }
 
-func htmlHead(program string, date time.Time) string {
-	return fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>%s — Auditor View — %s</title>
-<style>
+// exhibitCSS is the stylesheet for the auditor view, kept as a constant so
+// it never passes through fmt.Sprintf and % characters need no escaping.
+const exhibitCSS = `<style>
 :root {
   --bg: #f1f5f9;
   --surface: #ffffff;
@@ -253,7 +248,7 @@ main { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; display: grid; gap
 .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
 .stale-notice { background: #fef9c3; border-left: 4px solid #ca8a04; padding: 0.75rem 1rem; margin: 1rem 2rem; border-radius: 4px; font-size: 0.875rem; }
 .unavailable { color: var(--text-muted); font-style: italic; }
-table { width: 100%%; border-collapse: collapse; font-size: 0.875rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
 th, td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
 th { background: var(--surface-2); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; }
@@ -273,15 +268,25 @@ th { background: var(--surface-2); font-weight: 600; font-size: 0.75rem; text-tr
 .status-collected { color: #16a34a; }
 footer { text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.75rem; }
 @media print { header { position: static; } }
-</style>
+</style>`
+
+func htmlHead(program string, date time.Time) string {
+	esc := html.EscapeString(program)
+	dateStr := date.Format("2006-01-02")
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>` + esc + ` — Auditor View — ` + dateStr + `</title>
+` + exhibitCSS + `
 </head>
 <body>
 <header>
-  <h1>%s — Compliance Posture</h1>
-  <p>Auditor View — Generated %s — Formulary/exhibit</p>
+  <h1>` + esc + ` — Compliance Posture</h1>
+  <p>Auditor View — Generated ` + dateStr + ` — Formulary/exhibit</p>
 </header>
-`, html.EscapeString(program), date.Format("2006-01-02"),
-		html.EscapeString(program), date.Format("2006-01-02"))
+`
 }
 
 func htmlFoot() string {
