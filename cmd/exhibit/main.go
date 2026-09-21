@@ -29,6 +29,7 @@ func main() {
 		lookbackFlag     = flag.Int("lookback-days", 90, "Provenance lookback window in days")
 		outputFlag       = flag.String("output", "", "Output HTML path (default: stdout)")
 		reportDateFlag   = flag.String("report-date", "", "Report date YYYY-MM-DD (default: today)")
+		internalOnlyFlag = flag.Bool("internal-only", false, "Include internal_only sections (default: auditor mode excludes them)")
 		versionFlag      = flag.Bool("version", false, "Print version and exit")
 	)
 	flag.Usage = usage
@@ -65,8 +66,8 @@ func main() {
 		ReportDate: reportDate,
 	}
 
-	// Load run state.
-	rs, err := loadRunState(runStatePath)
+	// Load run state, filtering internal_only fields when in auditor mode.
+	rs, err := loadRunState(runStatePath, *internalOnlyFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not load run state: %v\n", err)
 	} else {
@@ -136,10 +137,14 @@ type rawRunState struct {
 	} `json:"evidence_windows,omitempty"`
 }
 
-func loadRunState(path string) (*rawRunState, error) {
+func loadRunState(path string, includeInternal bool) (*rawRunState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
+	}
+	data, err = render.FilterInternalOnly(data, includeInternal)
+	if err != nil {
+		return nil, fmt.Errorf("filtering internal_only fields: %w", err)
 	}
 	var rs rawRunState
 	return &rs, json.Unmarshal(data, &rs)
@@ -230,6 +235,7 @@ Flags:
   --lookback-days int     Provenance lookback window in days (default: 90)
   --output string         Output HTML path (default: stdout)
   --report-date string    Report date YYYY-MM-DD (default: today)
+  --internal-only         Include internal_only sections (default: auditor mode, internal sections excluded)
   --version               Print version and exit
 
 Examples:
