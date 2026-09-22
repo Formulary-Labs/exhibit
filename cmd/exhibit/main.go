@@ -23,14 +23,16 @@ const version = "0.1.0"
 
 func main() {
 	var (
-		programFlag      = flag.String("program", "", "Program slug (required)")
-		runStateFlag     = flag.String("run-state", "", "Path to run state JSON (default: runs/[program]/latest.json)")
-		provenanceFlag   = flag.String("provenance", "logs/provenance.jsonl", "Path to provenance log")
-		lookbackFlag     = flag.Int("lookback-days", 90, "Provenance lookback window in days")
-		outputFlag       = flag.String("output", "", "Output HTML path (default: stdout)")
-		reportDateFlag   = flag.String("report-date", "", "Report date YYYY-MM-DD (default: today)")
-		internalOnlyFlag = flag.Bool("internal-only", false, "Include internal_only sections (default: auditor mode excludes them)")
-		versionFlag      = flag.Bool("version", false, "Print version and exit")
+		programFlag          = flag.String("program", "", "Program slug (required)")
+		runStateFlag         = flag.String("run-state", "", "Path to run state JSON (default: runs/[program]/latest.json)")
+		provenanceFlag       = flag.String("provenance", "logs/provenance.jsonl", "Path to provenance log")
+		lookbackFlag         = flag.Int("lookback-days", 90, "Provenance lookback window in days")
+		outputFlag           = flag.String("output", "", "Output HTML path (default: stdout)")
+		reportDateFlag       = flag.String("report-date", "", "Report date YYYY-MM-DD (default: today)")
+		internalOnlyFlag     = flag.Bool("internal-only", false, "Include internal_only sections (default: auditor mode excludes them)")
+		verifyProvenanceFlag = flag.Bool("verify-provenance", true, "Verify provenance log hash-chain integrity before assembling report (exit 2 on failure)")
+		skipVerifyFlag       = flag.Bool("skip-provenance-verify", false, "Skip provenance hash-chain verification (overrides --verify-provenance)")
+		versionFlag          = flag.Bool("version", false, "Print version and exit")
 	)
 	flag.Usage = usage
 	flag.Parse()
@@ -72,6 +74,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "warning: could not load run state: %v\n", err)
 	} else {
 		populateFromRunState(view, rs, reportDate)
+	}
+
+	// Verify provenance hash-chain integrity before assembling the report.
+	if *verifyProvenanceFlag && !*skipVerifyFlag {
+		if err := verifyProvenanceChain(*provenanceFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "error: provenance chain verification failed: %v\n", err)
+			os.Exit(exit.ToolError)
+		}
 	}
 
 	// Load provenance.
@@ -251,6 +261,61 @@ func pct(n, total int) float64 {
 	return float64(n) / float64(total) * 100
 }
 
+// verifyProvenanceChain reads the provenance log, validates the hash-chain,
+// and returns an error if any genuine integrity failure is found. Legacy
+// entries that predate hash-chain support (no Digest field) emit warnings
+// to stderr but do not cause a failure — only digest mismatches or chain
+// breaks (evidence of tampering) return a non-nil error.
+func verifyProvenanceChain(logPath string) error {
+	results, err := provenance.Verify(logPath)
+	if err != nil {
+		return fmt.Errorf("reading provenance log: %w", err)
+	}
+
+	var failures []string
+	legacyCount := 0
+
+	for _, r := range results {
+		if !r.Valid {
+			// Distinguish legacy (no digest) from actual tampering.
+			if r.FailureReason == "missing digest field (legacy entry predating hash-chain)" {
+				legacyCount++
+				continue
+			}
+			failures = append(failures, fmt.Sprintf("  entry %d (%s): %s", r.EntryIndex, r.EntryID, r.FailureReason))
+		}
+		if !r.ChainValid {
+			failures = append(failures, fmt.Sprintf("  entry %d (%s): %s", r.EntryIndex, r.EntryID, r.FailureReason))
+		}
+	}
+
+	if legacyCount > 0 {
+		fmt.Fprintf(os.Stderr, "warning: %d provenance entr%s predate hash-chain support (no digest); verification skipped for those entries\n",
+			legacyCount, pluralSuffix(legacyCount, "y", "ies"))
+	}
+
+	if len(failures) > 0 {
+		return fmt.Errorf("%d integrity failure(s) detected:\n%s",
+			len(failures), joinLines(failures))
+	}
+	return nil
+}
+
+func pluralSuffix(n int, singular, plural string) string {
+	if n == 1 {
+		return singular
+	}
+	return plural
+}
+
+func joinLines(lines []string) string {
+	result := ""
+	for _, l := range lines {
+		result += l + "\n"
+	}
+	return result
+}
+
 func usage() {
 	fmt.Fprintln(os.Stderr, `exhibit — auditor-filtered compliance posture view
 
@@ -258,14 +323,16 @@ Usage:
   exhibit --program <slug> [flags]
 
 Flags:
-  --program string        Program slug (required)
-  --run-state string      Path to run state JSON (default: runs/[program]/latest.json)
-  --provenance string     Path to provenance log (default: logs/provenance.jsonl)
-  --lookback-days int     Provenance lookback window in days (default: 90)
-  --output string         Output HTML path (default: stdout)
-  --report-date string    Report date YYYY-MM-DD (default: today)
-  --internal-only         Include internal_only sections (default: auditor mode, internal sections excluded)
-  --version               Print version and exit
+  --program string               Program slug (required)
+  --run-state string             Path to run state JSON (default: runs/[program]/latest.json)
+  --provenance string            Path to provenance log (default: logs/provenance.jsonl)
+  --lookback-days int            Provenance lookback window in days (default: 90)
+  --output string                Output HTML path (default: stdout)
+  --report-date string           Report date YYYY-MM-DD (default: today)
+  --internal-only                Include internal_only sections (default: auditor mode, internal sections excluded)
+  --verify-provenance            Verify provenance hash-chain integrity before assembly (default: true)
+  --skip-provenance-verify       Skip provenance hash-chain verification (escape hatch)
+  --version                      Print version and exit
 
 Examples:
   exhibit --program iso42001 --output exhibit.html
