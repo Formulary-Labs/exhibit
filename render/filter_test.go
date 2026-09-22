@@ -34,7 +34,10 @@ func TestFilterInternalOnly_excludesInternalFields(t *testing.T) {
 	if len(risks) != 1 {
 		t.Fatalf("expected 1 risk after filtering, got %d", len(risks))
 	}
-	r := risks[0].(map[string]interface{})
+	r, ok := risks[0].(map[string]interface{})
+	if !ok {
+		t.Fatal("risk entry is not a map")
+	}
 	if r["id"] != "RISK-002" {
 		t.Errorf("expected RISK-002 to survive, got %v", r["id"])
 	}

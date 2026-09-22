@@ -113,8 +113,8 @@ func LoadProvenanceLog(path, program string, since time.Time) ([]ProvenanceEntry
 	return entries, scanner.Err()
 }
 
-// RenderHTML produces the auditor dashboard HTML string. //nolint:revive // stutter is intentional for clarity
-func RenderHTML(v *AuditorView) string {
+// RenderHTML produces the auditor dashboard HTML string.
+func RenderHTML(v *AuditorView) string { //nolint:revive // stutter is intentional for clarity
 	sb := &strings.Builder{}
 	sb.WriteString(htmlHead(v.Program, v.ReportDate))
 
