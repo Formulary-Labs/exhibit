@@ -99,7 +99,7 @@ func TestLoadProvenanceLog(t *testing.T) {
 		line, _ := json.Marshal(e)
 		f.Write(append(line, '\n')) //nolint:errcheck
 	}
-	f.Close()
+	f.Close() //nolint:errcheck // test write-only file, close error is harmless
 
 	since := time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC) // within 30 days of Sep 1
 	loaded, err := render.LoadProvenanceLog(path, "testprog", since)

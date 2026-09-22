@@ -19,10 +19,10 @@ import (
 
 // AuditorView is the input data assembled for rendering.
 type AuditorView struct {
-	Program      string
-	ReportDate   time.Time
-	IsStale      bool
-	StaleNote    string
+	Program    string
+	ReportDate time.Time
+	IsStale    bool
+	StaleNote  string
 
 	// Section 1 — Monitoring activity.
 	ProvenanceEntries []ProvenanceEntry
@@ -113,7 +113,7 @@ func LoadProvenanceLog(path, program string, since time.Time) ([]ProvenanceEntry
 	return entries, scanner.Err()
 }
 
-// RenderHTML produces the auditor dashboard HTML string.
+// RenderHTML produces the auditor dashboard HTML string. //nolint:revive // stutter is intentional for clarity
 func RenderHTML(v *AuditorView) string {
 	sb := &strings.Builder{}
 	sb.WriteString(htmlHead(v.Program, v.ReportDate))
@@ -201,11 +201,14 @@ func renderSection4(sb *strings.Builder, v *AuditorView) {
 	} else {
 		sb.WriteString(`<table><thead><tr><th>ID</th><th>Title</th><th>Due Date</th><th>Control</th><th>Status</th></tr></thead><tbody>` + "\n")
 		for _, e := range v.UpcomingEvidence {
-			statusClass := "status-upcoming"
-			if e.Status == "overdue" {
+			var statusClass string
+			switch e.Status {
+			case "overdue":
 				statusClass = "status-overdue"
-			} else if e.Status == "collected" {
+			case "collected":
 				statusClass = "status-collected"
+			default:
+				statusClass = "status-upcoming"
 			}
 			fmt.Fprintf(sb, `<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td class="%s">%s</td></tr>`+"\n",
 				html.EscapeString(e.ID),

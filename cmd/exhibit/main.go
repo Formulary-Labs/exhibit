@@ -87,7 +87,7 @@ func main() {
 	if *outputFlag == "" {
 		fmt.Print(html)
 	} else {
-		if err := os.WriteFile(*outputFlag, []byte(html), 0o644); err != nil {
+		if err := os.WriteFile(*outputFlag, []byte(html), 0o600); err != nil {
 			fmt.Fprintf(os.Stderr, "error writing output: %v\n", err)
 			os.Exit(exit.ToolError)
 		}
@@ -109,9 +109,9 @@ func main() {
 
 // rawRunState is a minimal struct for reading the run state JSON.
 type rawRunState struct {
-	Program    string     `json:"program"`
-	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
-	RunDate    *time.Time `json:"run_date,omitempty"`
+	Program            string     `json:"program"`
+	UpdatedAt          *time.Time `json:"updated_at,omitempty"`
+	RunDate            *time.Time `json:"run_date,omitempty"`
 	RecommendedNextRun *time.Time `json:"recommended_next_run,omitempty"`
 
 	Coverage *struct {
