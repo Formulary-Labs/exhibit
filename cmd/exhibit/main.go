@@ -23,16 +23,17 @@ const version = "0.1.0"
 
 func main() {
 	var (
-		programFlag          = flag.String("program", "", "Program slug (required)")
-		runStateFlag         = flag.String("run-state", "", "Path to run state JSON (default: runs/[program]/latest.json)")
-		provenanceFlag       = flag.String("provenance", "logs/provenance.jsonl", "Path to provenance log")
-		lookbackFlag         = flag.Int("lookback-days", 90, "Provenance lookback window in days")
-		outputFlag           = flag.String("output", "", "Output HTML path (default: stdout)")
-		reportDateFlag       = flag.String("report-date", "", "Report date YYYY-MM-DD (default: today)")
-		internalOnlyFlag     = flag.Bool("internal-only", false, "Include internal_only sections (default: auditor mode excludes them)")
-		verifyProvenanceFlag = flag.Bool("verify-provenance", true, "Verify provenance log hash-chain integrity before assembling report (exit 2 on failure)")
-		skipVerifyFlag       = flag.Bool("skip-provenance-verify", false, "Skip provenance hash-chain verification (overrides --verify-provenance)")
-		versionFlag          = flag.Bool("version", false, "Print version and exit")
+		programFlag                 = flag.String("program", "", "Program slug (required)")
+		runStateFlag                = flag.String("run-state", "", "Path to run state JSON (default: runs/[program]/latest.json)")
+		provenanceFlag              = flag.String("provenance", "logs/provenance.jsonl", "Path to provenance log")
+		lookbackFlag                = flag.Int("lookback-days", 90, "Provenance lookback window in days")
+		outputFlag                  = flag.String("output", "", "Output HTML path (default: stdout)")
+		reportDateFlag              = flag.String("report-date", "", "Report date YYYY-MM-DD (default: today)")
+		internalOnlyFlag            = flag.Bool("internal-only", false, "Include internal_only sections (default: auditor mode excludes them)")
+		verifyProvenanceFlag        = flag.Bool("verify-provenance", true, "Verify provenance log hash-chain integrity before assembling report (exit 2 on failure)")
+		skipVerifyFlag              = flag.Bool("skip-provenance-verify", false, "Skip provenance hash-chain verification (overrides --verify-provenance)")
+		warnOnProvenanceFailureFlag = flag.Bool("warn-on-provenance-failure", false, "Render dashboard with a warning banner on provenance failure instead of exiting")
+		versionFlag                 = flag.Bool("version", false, "Print version and exit")
 	)
 	flag.Usage = usage
 	flag.Parse()
@@ -79,8 +80,15 @@ func main() {
 	// Verify provenance hash-chain integrity before assembling the report.
 	if *verifyProvenanceFlag && !*skipVerifyFlag {
 		if err := verifyProvenanceChain(*provenanceFlag); err != nil {
-			fmt.Fprintf(os.Stderr, "error: provenance chain verification failed: %v\n", err)
-			os.Exit(exit.ToolError)
+			fmt.Fprintf(os.Stderr,
+				"error: provenance chain verification failed: %v\n"+
+					"  Pass --skip-provenance-verify to bypass this check for initial or migrated runs.\n"+
+					"  Pass --warn-on-provenance-failure to render the dashboard with a warning banner instead of exiting.\n", err)
+			if !*warnOnProvenanceFailureFlag {
+				os.Exit(exit.ToolError)
+			}
+			view.ProvenanceWarning = fmt.Sprintf(
+				"Warning: provenance chain verification failed — %v. Dashboard data may be from a migrated or unverified workspace.", err)
 		}
 	}
 
@@ -117,12 +125,32 @@ func main() {
 	})
 }
 
+// flexTime is a time.Time wrapper whose JSON unmarshaler accepts both
+// RFC 3339 ("2026-01-15T00:00:00Z") and date-only ("2026-01-15") formats.
+type flexTime time.Time
+
+func (ft *flexTime) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			*ft = flexTime(t)
+			return nil
+		}
+	}
+	return fmt.Errorf("cannot parse time %q: expected RFC3339 or YYYY-MM-DD", s)
+}
+
+func (ft flexTime) Time() time.Time { return time.Time(ft) }
+
 // rawRunState is a minimal struct for reading the run state JSON.
 type rawRunState struct {
-	Program            string     `json:"program"`
-	UpdatedAt          *time.Time `json:"updated_at,omitempty"`
-	RunDate            *time.Time `json:"run_date,omitempty"`
-	RecommendedNextRun *time.Time `json:"recommended_next_run,omitempty"`
+	Program            string    `json:"program"`
+	UpdatedAt          *flexTime `json:"updated_at,omitempty"`
+	RunDate            *flexTime `json:"run_date,omitempty"`
+	RecommendedNextRun *flexTime `json:"recommended_next_run,omitempty"`
 
 	Coverage *struct {
 		// Schema 2.0 fields.
@@ -168,7 +196,7 @@ func loadRunState(path string, includeInternal bool) (*rawRunState, error) {
 
 func populateFromRunState(view *render.AuditorView, rs *rawRunState, now time.Time) {
 	// Staleness check.
-	if rs.RecommendedNextRun != nil && now.After(*rs.RecommendedNextRun) {
+	if rs.RecommendedNextRun != nil && now.After(rs.RecommendedNextRun.Time()) {
 		view.IsStale = true
 		refDate := rs.RunDate
 		if refDate == nil {
@@ -176,10 +204,10 @@ func populateFromRunState(view *render.AuditorView, rs *rawRunState, now time.Ti
 		}
 		dateStr := "unknown"
 		if refDate != nil {
-			dateStr = refDate.Format("2006-01-02")
+			dateStr = refDate.Time().Format("2006-01-02")
 		}
 		view.StaleNote = fmt.Sprintf("Note: This view was generated from program data last updated %s. A pipeline run is overdue as of %s. Data may not reflect current program state.",
-			dateStr, rs.RecommendedNextRun.Format("2006-01-02"))
+			dateStr, rs.RecommendedNextRun.Time().Format("2006-01-02"))
 	}
 
 	// Coverage — coalesce schema 2.0 fields over 1.1 legacy fields.
@@ -331,7 +359,8 @@ Flags:
   --report-date string           Report date YYYY-MM-DD (default: today)
   --internal-only                Include internal_only sections (default: auditor mode, internal sections excluded)
   --verify-provenance            Verify provenance hash-chain integrity before assembly (default: true)
-  --skip-provenance-verify       Skip provenance hash-chain verification (escape hatch)
+  --skip-provenance-verify       Skip provenance hash-chain verification (escape hatch for initial/migrated runs)
+  --warn-on-provenance-failure   Render dashboard with a warning banner on provenance failure instead of exiting
   --version                      Print version and exit
 
 Examples:

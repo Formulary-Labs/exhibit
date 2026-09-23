@@ -19,10 +19,11 @@ import (
 
 // AuditorView is the input data assembled for rendering.
 type AuditorView struct {
-	Program    string
-	ReportDate time.Time
-	IsStale    bool
-	StaleNote  string
+	Program           string
+	ReportDate        time.Time
+	IsStale           bool
+	StaleNote         string
+	ProvenanceWarning string // non-empty when provenance check failed but --warn-on-provenance-failure was set
 
 	// Section 1 — Monitoring activity.
 	ProvenanceEntries []ProvenanceEntry
@@ -118,6 +119,9 @@ func RenderHTML(v *AuditorView) string { //nolint:revive // stutter is intention
 	sb := &strings.Builder{}
 	sb.WriteString(htmlHead(v.Program, v.ReportDate))
 
+	if v.ProvenanceWarning != "" {
+		fmt.Fprintf(sb, `<div class="provenance-warning">%s</div>`+"\n", html.EscapeString(v.ProvenanceWarning))
+	}
 	if v.IsStale {
 		fmt.Fprintf(sb, `<div class="stale-notice">%s</div>`+"\n", html.EscapeString(v.StaleNote))
 	}
@@ -249,6 +253,7 @@ header p  { color: #94a3b8; font-size: 0.875rem; margin-top: 0.25rem; }
 main { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; display: grid; gap: 1.5rem; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; }
 .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
+.provenance-warning { background: #fee2e2; border-left: 4px solid #dc2626; padding: 0.75rem 1rem; margin: 1rem 2rem; border-radius: 4px; font-size: 0.875rem; font-weight: 600; }
 .stale-notice { background: #fef9c3; border-left: 4px solid #ca8a04; padding: 0.75rem 1rem; margin: 1rem 2rem; border-radius: 4px; font-size: 0.875rem; }
 .unavailable { color: var(--text-muted); font-style: italic; }
 table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
