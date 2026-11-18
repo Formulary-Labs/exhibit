@@ -6,6 +6,15 @@ One self-contained HTML file. Opens in a browser, prints to PDF, contains no Jav
 go get github.com/Formulary-Labs/exhibit
 ```
 
+## In the ecosystem
+
+Formulary is a **pick-and-choose** suite of small, single-purpose CLIs. Install only the tools your workflow needs; each runs standalone. Shared contracts live in [`substrate`](https://github.com/Formulary-Labs/substrate). Optional Make pipelines (or an agent such as `regimen`) compose tools into a run — plug-and-play, not all-or-nothing.
+
+**This tool:** single self-contained HTML auditor view — renders, does not compute.  
+**Works with:** `vital`, `titer`, `specimen`, `dose` feed the sections.  
+**Pipeline stage:** present.
+
+
 ## What it does
 
 `exhibit` produces a single self-contained HTML file from program compliance posture data. The four sections — monitoring activity, control coverage, risk register, and evidence calendar — are assembled from the outputs of other Formulary tools. `exhibit` renders; it does not compute.
@@ -44,6 +53,25 @@ html, err := render.Dashboard(render.AuditorView{
 ```
 
 `LoadProvenanceLog(path, program, since)` is available to read provenance entries from the JSONL log by program and time window.
+
+### CLI
+
+```bash
+exhibit --program my-isms --output out/dashboard.html
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--program` | — | Program slug (required) |
+| `--run-state` | `runs/[program]/latest.json` | Program run state JSON |
+| `--provenance` | `logs/provenance.jsonl` | Provenance log path |
+| `--lookback-days` | `90` | Provenance lookback window |
+| `--report-date` | today | Report date (YYYY-MM-DD) |
+| `--internal-only` | `false` | Include `internal_only` sections (auditor mode excludes them by default) |
+| `--verify-provenance` | `true` | Verify the provenance log's hash-chain integrity before rendering; exits `2` on tamper detection |
+| `--warn-on-provenance-failure` | `false` | Render with a warning banner instead of exiting when verification fails |
+
+Provenance integrity: `exhibit` verifies the hash chain of the provenance ledger before assembling the report, so a tampered log fails loudly rather than rendering a trustworthy-looking dashboard from untrusted data.
 
 ## Dashboard sections
 
